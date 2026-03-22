@@ -35,3 +35,17 @@ def get_memory() -> MemoryStore:
 def get_user_profile() -> MemoryStore:
     """Read user profile (USER.md)."""
     return _read_memory_file(memories_dir() / "USER.md")
+
+
+def save_memory(raw: str) -> None:
+    """Write agent memory (MEMORY.md)."""
+    path = memories_dir() / "MEMORY.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(raw.rstrip() + "\n", encoding="utf-8")
+
+
+def save_user_profile(raw: str) -> None:
+    """Write user profile (USER.md)."""
+    path = memories_dir() / "USER.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(raw.rstrip() + "\n", encoding="utf-8")

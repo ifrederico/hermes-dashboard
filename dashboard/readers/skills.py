@@ -94,6 +94,19 @@ def get_skill(name: str) -> Optional[Skill]:
     return None
 
 
+def delete_skill(name: str) -> bool:
+    """Delete a skill directory by name. Returns True if deleted."""
+    import shutil
+    skill = get_skill(name)
+    if not skill:
+        return False
+    try:
+        shutil.rmtree(skill.path)
+        return True
+    except OSError:
+        return False
+
+
 def get_skill_file(name: str, file_path: str) -> Optional[str]:
     """Read a linked file from a skill directory."""
     skill = get_skill(name)

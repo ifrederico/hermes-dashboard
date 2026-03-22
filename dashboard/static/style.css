@@ -508,6 +508,114 @@ small, .dim { color: var(--text-dim); }
     text-align: center;
 }
 
+/* Section headers with actions */
+.section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.section-header h2 { margin: 0; }
+
+/* Buttons */
+.btn {
+    display: inline-block;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.85em;
+    cursor: pointer;
+    text-decoration: none;
+    font-family: var(--font-main);
+    line-height: 1.4;
+}
+
+.btn:hover { background: var(--surface-alt); text-decoration: none; }
+.btn:visited { color: var(--text); }
+
+.btn-sm { padding: 3px 10px; font-size: 0.8em; }
+
+.btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.btn-primary:hover { opacity: 0.9; }
+
+.btn-danger {
+    background: var(--error);
+    color: #fff;
+    border-color: var(--error);
+}
+
+.btn-danger:hover { opacity: 0.9; }
+
+/* Edit forms */
+.edit-form { margin: 12px 0; }
+
+.edit-area {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+.edit-area:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Flash messages */
+.flash {
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    margin-bottom: 16px;
+}
+
+.flash-ok {
+    background: #dcfce7;
+    color: var(--success);
+    border: 1px solid #bbf7d0;
+}
+
+@media (prefers-color-scheme: dark) {
+    .flash-ok { background: #14532d; border-color: #166534; }
+}
+
+/* Danger zone */
+.danger-zone {
+    margin-top: 40px;
+    padding: 16px;
+    border: 1px solid var(--error);
+    border-radius: 6px;
+    background: var(--surface);
+}
+
+.danger-zone h3 {
+    color: var(--error);
+    margin: 0 0 8px;
+    font-size: 0.9em;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .layout { flex-direction: column; }

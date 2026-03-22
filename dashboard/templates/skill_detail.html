@@ -42,4 +42,13 @@
 <div class="skill-body">
   {{ body_html | safe }}
 </div>
+
+<div class="danger-zone">
+  <h3>Danger Zone</h3>
+  <form method="post" action="/skills/{{ skill.name }}/delete" class="delete-form"
+        onsubmit="return confirm('Delete skill \'{{ skill.name }}\'? This removes the entire skill directory and cannot be undone.')">
+    <input type="hidden" name="confirm" value="yes">
+    <button type="submit" class="btn btn-danger">Delete Skill</button>
+  </form>
+</div>
 {% endblock %}

@@ -7,9 +7,32 @@
   <h1>Memory</h1>
 </div>
 
-<h2>Agent Memory</h2>
+{% if saved == 'memory' %}
+<div class="flash flash-ok">Agent memory saved.</div>
+{% elif saved == 'user' %}
+<div class="flash flash-ok">User profile saved.</div>
+{% endif %}
+
+<!-- Agent Memory -->
+<div class="section-header">
+  <h2>Agent Memory</h2>
+  {% if editing != 'memory' %}
+  <a href="/memory?edit=memory" class="btn btn-sm">Edit</a>
+  {% endif %}
+</div>
 <p><small class="dim">What the agent remembers about the environment and its own notes</small></p>
-{% if memory.entries %}
+
+{% if editing == 'memory' %}
+<form method="post" action="/memory/save" class="edit-form">
+  <input type="hidden" name="target" value="memory">
+  <textarea name="content" rows="12" class="edit-area">{{ memory.raw }}</textarea>
+  <div class="edit-actions">
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="/memory" class="btn btn-sm">Cancel</a>
+    <small class="dim">Entries are separated by § on its own line</small>
+  </div>
+</form>
+{% elif memory.entries %}
 <div class="memory-entries">
   {% for entry in memory.entries %}
   <div class="memory-entry">{{ entry }}</div>
@@ -21,9 +44,26 @@
 </p>
 {% endif %}
 
-<h2>User Profile</h2>
+<!-- User Profile -->
+<div class="section-header">
+  <h2>User Profile</h2>
+  {% if editing != 'user' %}
+  <a href="/memory?edit=user" class="btn btn-sm">Edit</a>
+  {% endif %}
+</div>
 <p><small class="dim">What the agent knows about you</small></p>
-{% if user_profile.entries %}
+
+{% if editing == 'user' %}
+<form method="post" action="/memory/save" class="edit-form">
+  <input type="hidden" name="target" value="user">
+  <textarea name="content" rows="8" class="edit-area">{{ user_profile.raw }}</textarea>
+  <div class="edit-actions">
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="/memory" class="btn btn-sm">Cancel</a>
+    <small class="dim">Entries are separated by § on its own line</small>
+  </div>
+</form>
+{% elif user_profile.entries %}
 <div class="memory-entries">
   {% for entry in user_profile.entries %}
   <div class="memory-entry">{{ entry }}</div>

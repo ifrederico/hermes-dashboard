@@ -6,7 +6,7 @@ import markdown
 import yaml
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, RedirectResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -76,13 +76,28 @@ async def session_detail(request: Request):
 
 
 async def memory_page(request: Request):
+    saved = request.query_params.get("saved", "")
+    editing = request.query_params.get("edit", "")
     mem = memory.get_memory()
     user = memory.get_user_profile()
     return templates.TemplateResponse(request, "memory.html", {
         "page": "memory",
         "memory": mem,
         "user_profile": user,
+        "editing": editing,
+        "saved": saved,
     })
+
+
+async def memory_save(request: Request):
+    form = await request.form()
+    target = form.get("target", "")
+    content = form.get("content", "")
+    if target == "memory":
+        memory.save_memory(content)
+    elif target == "user":
+        memory.save_user_profile(content)
+    return RedirectResponse(url="/memory?saved=" + target, status_code=303)
 
 
 async def skills_list(request: Request):
@@ -109,6 +124,14 @@ async def skill_detail(request: Request):
         "skill": skill,
         "body_html": body_html,
     })
+
+
+async def skill_delete(request: Request):
+    name = request.path_params["name"]
+    form = await request.form()
+    if form.get("confirm") == "yes":
+        skills.delete_skill(name)
+    return RedirectResponse(url="/skills", status_code=303)
 
 
 async def cron_list(request: Request):
@@ -155,8 +178,10 @@ routes = [
     Route("/sessions", sessions_list),
     Route("/sessions/{session_id:path}", session_detail),
     Route("/memory", memory_page),
+    Route("/memory/save", memory_save, methods=["POST"]),
     Route("/skills", skills_list),
     Route("/skills/{name:str}", skill_detail),
+    Route("/skills/{name:str}/delete", skill_delete, methods=["POST"]),
     Route("/cron", cron_list),
     Route("/cron/{job_id:str}", cron_detail),
     Route("/config", config_page),
