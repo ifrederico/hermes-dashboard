@@ -317,6 +317,17 @@ td.mono {
     color: var(--accent);
 }
 
+.badge-live {
+    background: color-mix(in srgb, var(--success) 15%, transparent);
+    color: var(--success);
+    animation: pulse-live 2s ease-in-out infinite;
+}
+
+@keyframes pulse-live {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
 /* ===== Cards ===== */
 .card {
     background: var(--surface);

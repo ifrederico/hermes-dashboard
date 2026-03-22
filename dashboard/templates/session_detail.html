@@ -26,7 +26,7 @@
         {% if session.ended_at %}
             {{ session.ended_at.strftime('%Y-%m-%d %H:%M') }}
         {% else %}
-            —
+            <span id="live-badge" class="badge badge-live">● LIVE</span>
         {% endif %}
     </div>
     <div class="meta-item">
@@ -39,17 +39,16 @@
     </div>
 </div>
 
-{% if messages %}
 <div class="section">
     <div class="section-header">
         <h2>Conversation</h2>
-        <span class="section-count">{{ messages|length }} messages</span>
+        <span class="section-count" id="msg-count">{{ messages|length }} messages</span>
     </div>
 
-    <div class="conversation">
+    <div class="conversation" id="conversation">
         {% for msg in messages %}
         {% set role = msg.role|default('unknown') %}
-        <div class="message message-{{ role }}">
+        <div class="message message-{{ role }}" data-msg-id="{{ msg.id }}">
             <div class="message-role">{{ role }}</div>
             {% if role == 'tool' and msg.tool_name %}
             <div class="message-tool-name">⚙ {{ msg.tool_name }}</div>
@@ -59,7 +58,107 @@
         {% endfor %}
     </div>
 </div>
-{% else %}
-<p class="text-dim">No messages in this session.</p>
+
+{% if not messages %}
+<p class="text-dim">No messages in this session yet.</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not session.ended_at %}
+<script>
+(function() {
+    var conv = document.getElementById('conversation');
+    var countEl = document.getElementById('msg-count');
+    var liveBadge = document.getElementById('live-badge');
+    var msgCount = {{ messages|length }};
+
+    // Find the highest message id we already have
+    var lastId = 0;
+    var existing = conv.querySelectorAll('[data-msg-id]');
+    for (var i = 0; i < existing.length; i++) {
+        var mid = parseInt(existing[i].getAttribute('data-msg-id'), 10);
+        if (mid > lastId) lastId = mid;
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function appendMessage(msg) {
+        var div = document.createElement('div');
+        div.className = 'message message-' + msg.role;
+        div.setAttribute('data-msg-id', msg.id);
+
+        var roleDiv = document.createElement('div');
+        roleDiv.className = 'message-role';
+        roleDiv.textContent = msg.role;
+        div.appendChild(roleDiv);
+
+        if (msg.role === 'tool' && msg.tool_name) {
+            var toolDiv = document.createElement('div');
+            toolDiv.className = 'message-tool-name';
+            toolDiv.textContent = '⚙ ' + msg.tool_name;
+            div.appendChild(toolDiv);
+        }
+
+        var contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.textContent = msg.content || '(empty)';
+        div.appendChild(contentDiv);
+
+        conv.appendChild(div);
+        msgCount++;
+        countEl.textContent = msgCount + ' messages';
+
+        // Auto-scroll if user is near the bottom
+        var isNearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 200);
+        if (isNearBottom) {
+            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+    }
+
+    function markEnded() {
+        if (liveBadge) {
+            liveBadge.textContent = 'Ended';
+            liveBadge.className = 'badge badge-source';
+        }
+    }
+
+    // Open SSE connection
+    var url = '/sessions/{{ session.id }}/stream?after=' + lastId;
+    var source = new EventSource(url);
+
+    source.onmessage = function(e) {
+        try {
+            var msg = JSON.parse(e.data);
+            appendMessage(msg);
+        } catch (err) {
+            console.error('SSE parse error:', err);
+        }
+    };
+
+    source.addEventListener('done', function(e) {
+        markEnded();
+        source.close();
+    });
+
+    source.onerror = function() {
+        // EventSource auto-reconnects, but if session ended we stop
+        setTimeout(function() {
+            if (source.readyState === EventSource.CLOSED) {
+                markEnded();
+            }
+        }, 3000);
+    };
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+        source.close();
+    });
+})();
+</script>
 {% endif %}
 {% endblock %}

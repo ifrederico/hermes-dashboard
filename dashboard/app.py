@@ -1,5 +1,7 @@
 """Hermes Dashboard — Starlette application."""
 
+import asyncio
+import json
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
@@ -7,7 +9,7 @@ from datetime import datetime
 from starlette.applications import Starlette
 from starlette.routing import Route, Mount
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import Response, StreamingResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
@@ -200,6 +202,69 @@ async def skill_detail_page(request: Request) -> Response:
     )
 
 
+def _escape_html(text: str) -> str:
+    """Escape HTML entities for safe injection."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
+
+
+async def session_stream(request: Request) -> Response:
+    """SSE endpoint: streams new messages for a session as they arrive."""
+    session_id = request.path_params["session_id"]
+    after_id = int(request.query_params.get("after", 0))
+
+    async def event_generator():
+        last_id = after_id
+        idle_count = 0
+
+        while True:
+            # Check if client disconnected
+            if await request.is_disconnected():
+                break
+
+            new_msgs = sessions.get_messages_after(session_id, last_id)
+
+            if new_msgs:
+                idle_count = 0
+                for msg in new_msgs:
+                    last_id = msg["id"]
+                    # Build the SSE data payload
+                    payload = {
+                        "id": msg["id"],
+                        "role": msg.get("role", "unknown"),
+                        "content": msg.get("content", ""),
+                        "tool_name": msg.get("tool_name", ""),
+                    }
+                    data = json.dumps(payload, default=str)
+                    yield f"data: {data}\n\n"
+            else:
+                idle_count += 1
+
+                # Check if session has ended — if so, send a done event and stop
+                if idle_count % 5 == 0:  # check every ~5 seconds
+                    if sessions.get_session_ended(session_id):
+                        yield 'event: done\ndata: {"ended": true}\n\n'
+                        break
+
+            # Poll interval: 1 second
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 async def not_found(request: Request, exc: Exception) -> Response:
     return templates.TemplateResponse(request, "404.html", status_code=404)
 
@@ -219,6 +284,7 @@ routes = [
     Route("/", index),
     Route("/sessions", sessions_list),
     Route("/sessions/{session_id}", session_detail),
+    Route("/sessions/{session_id}/stream", session_stream),
     Route("/memory", memory_page),
     Route("/skills", skills_list),
     Route("/skills/{name}", skill_detail_page),

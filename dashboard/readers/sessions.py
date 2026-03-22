@@ -133,6 +133,48 @@ def get_messages(session_id: str) -> list[dict]:
         conn.close()
 
 
+def get_messages_after(session_id: str, after_id: int) -> list[dict]:
+    """Get messages with id > after_id for a session. Used by SSE streaming."""
+    conn = _connect()
+    if conn is None:
+        return []
+    try:
+        query = """
+            SELECT id, role, content, tool_call_id, tool_calls, tool_name,
+                   timestamp, token_count, finish_reason
+            FROM messages
+            WHERE session_id = ? AND id > ?
+            ORDER BY id
+        """
+        rows = conn.execute(query, (session_id, after_id)).fetchall()
+        results = []
+        for row in rows:
+            d = _row_to_dict(row)
+            d['timestamp'] = _parse_datetime(d.get('timestamp'))
+            if d.get('content') is None:
+                d['content'] = ''
+            results.append(d)
+        return results
+    finally:
+        conn.close()
+
+
+def get_session_ended(session_id: str) -> bool:
+    """Check if a session has ended (ended_at is set)."""
+    conn = _connect()
+    if conn is None:
+        return True
+    try:
+        row = conn.execute(
+            "SELECT ended_at FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if row is None:
+            return True
+        return row['ended_at'] is not None
+    finally:
+        conn.close()
+
+
 def get_stats() -> dict:
     conn = _connect()
     if conn is None:
