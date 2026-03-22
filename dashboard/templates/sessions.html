@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Sessions — Hermes Dashboard{% endblock %}
+
+{% block content %}
+<h1>Sessions</h1>
+
+<form class="search-form" method="get" action="/sessions">
+    <input type="search" name="q" value="{{ query|default('') }}" placeholder="Search sessions…" autocomplete="off">
+    <button type="submit" class="btn">Search</button>
+</form>
+
+{% if sessions %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Title / ID</th>
+                <th>Source</th>
+                <th>Model</th>
+                <th class="num">Messages</th>
+                <th class="num">Tokens (in/out)</th>
+                <th class="num">Cost</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sessions %}
+            <tr>
+                <td>
+                    <a href="/sessions/{{ s.id }}" class="truncate">
+                        {{ s.title or (s.id[:20] if s.id else '—') }}
+                    </a>
+                </td>
+                <td><span class="badge badge-source">{{ s.source|default('—') }}</span></td>
+                <td class="mono">{{ s.model|short_model }}</td>
+                <td class="num">{{ s.message_count|default(0) }}</td>
+                <td class="num mono">
+                    {{ s.input_tokens|default(0)|short_number }} / {{ s.output_tokens|default(0)|short_number }}
+                </td>
+                <td class="num mono">${{ "%.4f"|format(s.cost|default(0)) }}</td>
+                <td class="text-dim">
+                    {% if s.started_at %}
+                        {{ s.started_at.strftime('%Y-%m-%d %H:%M') }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="/sessions?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}">← Previous</a>
+    {% else %}
+        <span class="disabled">← Previous</span>
+    {% endif %}
+
+    <span class="text-dim">Page {{ page }}</span>
+
+    {% if has_next %}
+        <a href="/sessions?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}">Next →</a>
+    {% else %}
+        <span class="disabled">Next →</span>
+    {% endif %}
+</div>
+
+{% else %}
+<p class="text-dim">
+    {% if query %}
+        No sessions found matching "{{ query }}".
+    {% else %}
+        No sessions yet.
+    {% endif %}
+</p>
+{% endif %}
+{% endblock %}

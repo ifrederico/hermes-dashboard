@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ session.title|default(session.id|default('Session')) }} — Hermes Dashboard{% endblock %}
+
+{% block content %}
+<h1>{{ session.title|default(session.id|default('Session')) }}</h1>
+
+<div class="meta-bar">
+    <div class="meta-item">
+        <span class="meta-label">Model:</span>
+        <code>{{ session.model|default('—') }}</code>
+    </div>
+    <div class="meta-item">
+        <span class="meta-label">Source:</span>
+        <span class="badge badge-source">{{ session.source|default('—') }}</span>
+    </div>
+    <div class="meta-item">
+        <span class="meta-label">Started:</span>
+        {% if session.started_at %}
+            {{ session.started_at.strftime('%Y-%m-%d %H:%M') }}
+        {% else %}
+            —
+        {% endif %}
+    </div>
+    <div class="meta-item">
+        <span class="meta-label">Ended:</span>
+        {% if session.ended_at %}
+            {{ session.ended_at.strftime('%Y-%m-%d %H:%M') }}
+        {% else %}
+            —
+        {% endif %}
+    </div>
+    <div class="meta-item">
+        <span class="meta-label">Tokens:</span>
+        {{ session.input_tokens|default(0)|intcomma }} in / {{ session.output_tokens|default(0)|intcomma }} out
+    </div>
+    <div class="meta-item">
+        <span class="meta-label">Cost:</span>
+        ${{ "%.4f"|format(session.cost|default(0)) }}
+    </div>
+</div>
+
+{% if messages %}
+<div class="section">
+    <div class="section-header">
+        <h2>Conversation</h2>
+        <span class="section-count">{{ messages|length }} messages</span>
+    </div>
+
+    <div class="conversation">
+        {% for msg in messages %}
+        {% set role = msg.role|default('unknown') %}
+        <div class="message message-{{ role }}">
+            <div class="message-role">{{ role }}</div>
+            {% if role == 'tool' and msg.tool_name %}
+            <div class="message-tool-name">⚙ {{ msg.tool_name }}</div>
+            {% endif %}
+            <div class="message-content">{{ msg.content|default('(empty)')|e }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<p class="text-dim">No messages in this session.</p>
+{% endif %}
+{% endblock %}

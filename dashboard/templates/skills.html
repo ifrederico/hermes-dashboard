@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Skills — Hermes Dashboard{% endblock %}
+
+{% block content %}
+<h1>Skills</h1>
+
+{% if skills_by_category %}
+    {% for category, skills in skills_by_category.items() %}
+    <div class="section">
+        <div class="section-header">
+            <h2>{{ category|default('Uncategorized') }}</h2>
+            <span class="section-count">{{ skills|length }} skills</span>
+        </div>
+        <div class="skill-list">
+            {% for skill in skills %}
+            <div class="skill-item">
+                <a href="/skills/{{ skill.name }}" class="skill-name">{{ skill.name }}</a>
+                <span class="skill-desc">{{ skill.description|default('—')|truncate(80) }}</span>
+                <span class="skill-version">{{ skill.version|default('') }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <p class="text-dim">No skills found.</p>
+{% endif %}
+{% endblock %}

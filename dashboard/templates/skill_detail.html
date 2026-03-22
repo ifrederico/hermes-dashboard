@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ skill.name|default('Skill') }} — Hermes Dashboard{% endblock %}
+
+{% block content %}
+<h1>{{ skill.name|default('Skill') }}</h1>
+
+{% if skill.description %}
+<p class="text-dim">{{ skill.description }}</p>
+{% endif %}
+
+<div class="meta-bar">
+    <div class="meta-item">
+        <span class="meta-label">Category:</span>
+        {{ skill.category|default('—') }}
+    </div>
+    <div class="meta-item">
+        <span class="meta-label">Version:</span>
+        <code>{{ skill.version|default('—') }}</code>
+    </div>
+    <div class="meta-item">
+        <span class="meta-label">Path:</span>
+        <code>{{ skill.path|default('—') }}</code>
+    </div>
+</div>
+
+{% if skill.body_html %}
+<div class="section">
+    <div class="rendered-content">
+        {{ skill.body_html|safe }}
+    </div>
+</div>
+{% endif %}
+
+{% if skill.linked_files %}
+<div class="section">
+    <div class="section-header">
+        <h2>Linked Files</h2>
+        <span class="section-count">{{ skill.linked_files|length }} files</span>
+    </div>
+    <ul class="file-list">
+        {% for f in skill.linked_files %}
+        <li>{{ f }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

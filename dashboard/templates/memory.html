@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Memory — Hermes Dashboard{% endblock %}
+
+{% block content %}
+<h1>Memory</h1>
+
+<div class="two-col">
+    <div class="section">
+        <div class="section-header">
+            <h2>Agent Memory</h2>
+            <span class="section-count">{{ memory_entries|length }} entries</span>
+        </div>
+        {% if memory_entries %}
+            {% for entry in memory_entries %}
+            <div class="card">
+                <div class="message-content">{{ entry|e }}</div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-dim">No agent memory entries.</p>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <div class="section-header">
+            <h2>User Profile</h2>
+            <span class="section-count">{{ user_entries|length }} entries</span>
+        </div>
+        {% if user_entries %}
+            {% for entry in user_entries %}
+            <div class="card">
+                <div class="message-content">{{ entry|e }}</div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-dim">No user profile entries.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
