@@ -1,120 +1,108 @@
-"""Reader for Hermes skill files (SKILL.md with YAML frontmatter)."""
+"""Read-only access to Hermes skills (~/.hermes/skills/)."""
 
-import os
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
-HERMES_HOME = Path(os.environ.get('HERMES_HOME', Path.home() / '.hermes'))
-
-SKILLS_DIR = HERMES_HOME / 'skills'
-
-LINKED_SUBDIRS = ('references', 'templates', 'scripts', 'assets')
+from dashboard.config import skills_dir
 
 
-def _parse_frontmatter(text: str) -> tuple[dict, str]:
-    """Parse YAML frontmatter from a markdown file.
+@dataclass
+class Skill:
+    name: str
+    description: str
+    path: Path
+    category: Optional[str] = None
+    version: Optional[str] = None
+    author: Optional[str] = None
+    platforms: list[str] = field(default_factory=list)
+    body: str = ""
+    frontmatter: dict = field(default_factory=dict)
+    linked_files: dict = field(default_factory=dict)
 
-    Returns (metadata_dict, body_text). If no frontmatter found,
-    returns ({}, full_text).
-    """
-    if not text.startswith('---'):
-        return {}, text
 
-    parts = text.split('---', 2)
-    if len(parts) < 3:
-        return {}, text
-
-    # parts[0] is empty (before first ---), parts[1] is YAML, parts[2] is body
+def _parse_skill(skill_md_path: Path, base_dir: Path) -> Optional[Skill]:
+    """Parse a SKILL.md file into a Skill object."""
     try:
-        meta = yaml.safe_load(parts[1]) or {}
-    except yaml.YAMLError:
-        meta = {}
+        text = skill_md_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
 
-    body = parts[2].strip()
-    return meta, body
+    # Split YAML frontmatter from body
+    frontmatter = {}
+    body = text
+    if text.startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            try:
+                frontmatter = yaml.safe_load(parts[1]) or {}
+            except yaml.YAMLError:
+                frontmatter = {}
+            body = parts[2].strip()
 
+    name = frontmatter.get("name", skill_md_path.parent.name)
+    description = frontmatter.get("description", "")
 
-def _infer_category(skill_path: Path) -> str:
-    """Infer category from directory structure relative to skills dir."""
-    try:
-        rel = skill_path.parent.relative_to(SKILLS_DIR)
-    except ValueError:
-        return ''
-    # If SKILL.md is directly in skills/, no category
+    # Infer category from path depth
+    rel = skill_md_path.parent.relative_to(base_dir)
     parts = rel.parts
-    if not parts:
-        return ''
-    # Use the top-level parent directory as category
-    return parts[0]
+    category = parts[0] if len(parts) > 1 else None
+
+    # Find linked files
+    linked = {}
+    for subdir in ("references", "templates", "scripts", "assets"):
+        d = skill_md_path.parent / subdir
+        if d.is_dir():
+            linked[subdir] = sorted([f.name for f in d.iterdir() if f.is_file()])
+
+    return Skill(
+        name=name,
+        description=description,
+        path=skill_md_path.parent,
+        category=category,
+        version=frontmatter.get("version"),
+        author=frontmatter.get("author"),
+        platforms=frontmatter.get("platforms", []),
+        body=body,
+        frontmatter=frontmatter,
+        linked_files=linked,
+    )
 
 
-def _collect_linked_files(skill_dir: Path) -> list[str]:
-    """List files in linked subdirectories (references/, templates/, scripts/, assets/)."""
-    files = []
-    for subdir_name in LINKED_SUBDIRS:
-        subdir = skill_dir / subdir_name
-        if subdir.is_dir():
-            for f in sorted(subdir.rglob('*')):
-                if f.is_file():
-                    try:
-                        files.append(str(f.relative_to(skill_dir)))
-                    except ValueError:
-                        files.append(str(f))
-    return files
-
-
-def list_skills() -> list[dict]:
-    if not SKILLS_DIR.is_dir():
+def list_skills() -> list[Skill]:
+    """Walk the skills directory and return all skills."""
+    base = skills_dir()
+    if not base.exists():
         return []
 
     skills = []
-    for skill_file in SKILLS_DIR.rglob('SKILL.md'):
-        try:
-            text = skill_file.read_text(encoding='utf-8')
-        except (OSError, UnicodeDecodeError):
-            continue
+    for skill_md in sorted(base.rglob("SKILL.md")):
+        skill = _parse_skill(skill_md, base)
+        if skill:
+            skills.append(skill)
 
-        meta, _ = _parse_frontmatter(text)
-        category = _infer_category(skill_file)
-
-        skills.append({
-            'name': meta.get('name', skill_file.parent.name),
-            'description': meta.get('description', ''),
-            'version': meta.get('version', ''),
-            'category': category,
-            'path': str(skill_file),
-        })
-
-    skills.sort(key=lambda s: (s['category'], s['name']))
     return skills
 
 
-def get_skill(name: str) -> dict | None:
-    if not SKILLS_DIR.is_dir():
-        return None
-
-    for skill_file in SKILLS_DIR.rglob('SKILL.md'):
-        try:
-            text = skill_file.read_text(encoding='utf-8')
-        except (OSError, UnicodeDecodeError):
-            continue
-
-        meta, body = _parse_frontmatter(text)
-        skill_name = meta.get('name', skill_file.parent.name)
-
-        if skill_name == name:
-            category = _infer_category(skill_file)
-            linked_files = _collect_linked_files(skill_file.parent)
-
-            return {
-                'name': skill_name,
-                'description': meta.get('description', ''),
-                'version': meta.get('version', ''),
-                'category': category,
-                'body': body,
-                'path': str(skill_file),
-                'linked_files': linked_files,
-            }
-
+def get_skill(name: str) -> Optional[Skill]:
+    """Find a skill by name."""
+    for skill in list_skills():
+        if skill.name == name:
+            return skill
     return None
+
+
+def get_skill_file(name: str, file_path: str) -> Optional[str]:
+    """Read a linked file from a skill directory."""
+    skill = get_skill(name)
+    if not skill:
+        return None
+    target = skill.path / file_path
+    if not target.exists() or not target.is_file():
+        return None
+    try:
+        return target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None

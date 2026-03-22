@@ -1,37 +1,37 @@
-"""Reader for Hermes memory files (MEMORY.md and USER.md)."""
+"""Read-only access to Hermes memory files (MEMORY.md + USER.md)."""
 
-import os
+from dataclasses import dataclass
 from pathlib import Path
 
-HERMES_HOME = Path(os.environ.get('HERMES_HOME', Path.home() / '.hermes'))
-
-DELIMITER = '\n§\n'
+from dashboard.config import memories_dir
 
 
-def _read_entries(filepath: Path) -> list[str]:
-    """Read a memory file and split by the § delimiter. Returns empty list if missing."""
-    if not filepath.exists():
-        return []
-    try:
-        text = filepath.read_text(encoding='utf-8')
-    except (OSError, UnicodeDecodeError):
-        return []
-    if not text.strip():
-        return []
-    entries = text.split(DELIMITER)
-    return [e.strip() for e in entries if e.strip()]
+@dataclass
+class MemoryStore:
+    entries: list[str]
+    raw: str
+    file_path: Path
+    exists: bool
 
 
-def get_memory_entries() -> list[str]:
-    return _read_entries(HERMES_HOME / 'memories' / 'MEMORY.md')
+def _read_memory_file(path: Path) -> MemoryStore:
+    """Read a §-delimited memory file."""
+    if not path.exists():
+        return MemoryStore(entries=[], raw="", file_path=path, exists=False)
+
+    raw = path.read_text(encoding="utf-8").strip()
+    if not raw:
+        return MemoryStore(entries=[], raw="", file_path=path, exists=True)
+
+    entries = [e.strip() for e in raw.split("\n§\n") if e.strip()]
+    return MemoryStore(entries=entries, raw=raw, file_path=path, exists=True)
 
 
-def get_user_entries() -> list[str]:
-    return _read_entries(HERMES_HOME / 'memories' / 'USER.md')
+def get_memory() -> MemoryStore:
+    """Read agent memory (MEMORY.md)."""
+    return _read_memory_file(memories_dir() / "MEMORY.md")
 
 
-def get_all() -> dict:
-    return {
-        'memory': get_memory_entries(),
-        'user': get_user_entries(),
-    }
+def get_user_profile() -> MemoryStore:
+    """Read user profile (USER.md)."""
+    return _read_memory_file(memories_dir() / "USER.md")

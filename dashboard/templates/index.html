@@ -1,96 +1,81 @@
 {% extends "base.html" %}
-{% block title %}Overview — Hermes Dashboard{% endblock %}
+
+{% block title %}Overview{% endblock %}
 
 {% block content %}
-<h1>Overview</h1>
-
-<div class="stat-grid">
-    <div class="stat-card">
-        <div class="stat-value">{{ stats.total_sessions|default(0)|intcomma }}</div>
-        <div class="stat-label">Total Sessions</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">${{ "%.4f"|format(stats.total_cost|default(0)) }}</div>
-        <div class="stat-label">Total Cost</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ stats.total_input_tokens|default(0)|short_number }}</div>
-        <div class="stat-label">Input Tokens</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ stats.total_output_tokens|default(0)|short_number }}</div>
-        <div class="stat-label">Output Tokens</div>
-    </div>
+<div class="page-header">
+  <h1>Overview</h1>
 </div>
 
-{% if stats.models_used %}
-<div class="section">
-    <div class="section-header">
-        <h2>Models Used</h2>
-    </div>
-    <ul class="pill-list">
-        {% for model in stats.models_used %}
-        <li>{{ model }}</li>
-        {% endfor %}
-    </ul>
+<div class="stats">
+  <div class="stat-card">
+    <div class="label">Sessions</div>
+    <div class="value">{{ stats.total_sessions }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Messages</div>
+    <div class="value">{{ "{:,}".format(stats.total_messages) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Tool Calls</div>
+    <div class="value">{{ "{:,}".format(stats.total_tool_calls) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Total Tokens</div>
+    <div class="value">{{ "{:,}".format(stats.total_input_tokens + stats.total_output_tokens) }}</div>
+    <div class="sub">{{ "{:,}".format(stats.total_input_tokens) }} in / {{ "{:,}".format(stats.total_output_tokens) }} out</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Est. Cost</div>
+    <div class="value">${{ "%.2f"|format(stats.total_cost) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Skills</div>
+    <div class="value">{{ skill_count }}</div>
+  </div>
 </div>
+
+{% if stats.sources %}
+<h2>Sessions by Source</h2>
+<ul class="item-list">
+  {% for source, count in stats.sources.items() %}
+  <li>
+    <span class="item-main">{{ source }}</span>
+    <span class="item-meta">{{ count }}</span>
+  </li>
+  {% endfor %}
+</ul>
 {% endif %}
 
-{% if stats.platforms_used %}
-<div class="section">
-    <div class="section-header">
-        <h2>Platforms</h2>
-    </div>
-    <ul class="pill-list">
-        {% for platform in stats.platforms_used %}
-        <li>{{ platform }}</li>
-        {% endfor %}
-    </ul>
-</div>
+{% if stats.models %}
+<h2>Models Used</h2>
+<ul class="item-list">
+  {% for model, count in stats.models.items() %}
+  <li>
+    <span class="item-main mono">{{ model }}</span>
+    <span class="item-meta">{{ count }} sessions</span>
+  </li>
+  {% endfor %}
+</ul>
 {% endif %}
 
 {% if recent_sessions %}
-<div class="section">
-    <div class="section-header">
-        <h2>Recent Sessions</h2>
-        <span class="section-count">Last {{ recent_sessions|length }}</span>
-    </div>
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Title / ID</th>
-                    <th>Source</th>
-                    <th>Model</th>
-                    <th class="num">Messages</th>
-                    <th class="num">Cost</th>
-                    <th>Date</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for s in recent_sessions %}
-                <tr>
-                    <td>
-                        <a href="/sessions/{{ s.id }}" class="truncate">
-                            {{ s.title or (s.id[:20] if s.id else '—') }}
-                        </a>
-                    </td>
-                    <td><span class="badge badge-source">{{ s.source|default('—') }}</span></td>
-                    <td class="mono">{{ s.model|short_model }}</td>
-                    <td class="num">{{ s.message_count|default(0) }}</td>
-                    <td class="num mono">${{ "%.4f"|format(s.cost|default(0)) }}</td>
-                    <td class="text-dim">
-                        {% if s.started_at %}
-                            {{ s.started_at.strftime('%Y-%m-%d %H:%M') }}
-                        {% else %}
-                            —
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+<h2>Recent Sessions</h2>
+<ul class="item-list">
+  {% for s in recent_sessions %}
+  <li>
+    <span class="item-main">
+      <a href="/sessions/{{ s.id }}">
+        {% if s.title %}{{ s.title }}{% else %}{{ s.short_id }}{% endif %}
+      </a>
+      {% if s.is_subagent %}<span class="badge badge-sub">◇ subagent</span>{% endif %}
+      <span class="badge badge-source">{{ s.source }}</span>
+    </span>
+    <span class="item-meta">
+      {{ s.message_count }} msgs · {{ s.started.strftime('%b %d %H:%M') }}
+    </span>
+  </li>
+  {% endfor %}
+</ul>
 {% endif %}
 {% endblock %}

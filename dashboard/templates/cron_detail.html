@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Job: {{ job.name or job.id }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ job.name or job.id }}</h1>
+  <a href="/cron">← Back</a>
+</div>
+
+<div class="session-meta">
+  <div class="meta-item">ID: <span class="mono">{{ job.id }}</span></div>
+  <div class="meta-item">State:
+    <span>
+      {% if job.state == 'paused' %}<span class="badge badge-paused">paused</span>
+      {% elif job.state == 'completed' %}<span class="badge badge-source">completed</span>
+      {% elif job.enabled %}<span class="badge badge-ok">active</span>
+      {% else %}<span class="badge badge-source">disabled</span>{% endif %}
+    </span>
+  </div>
+  <div class="meta-item">Schedule: <span>{{ job.schedule_display }}</span></div>
+  {% if job.deliver %}
+  <div class="meta-item">Deliver to: <span>{{ job.deliver }}</span></div>
+  {% endif %}
+  {% if job.model %}
+  <div class="meta-item">Model: <span class="mono">{{ job.model }}</span></div>
+  {% endif %}
+  {% if job.created_at %}
+  <div class="meta-item">Created: <span>{{ job.created_at[:19] }}</span></div>
+  {% endif %}
+  {% if job.next_run_at %}
+  <div class="meta-item">Next run: <span>{{ job.next_run_at[:19] }}</span></div>
+  {% endif %}
+  {% if job.last_run_at %}
+  <div class="meta-item">Last run: <span>{{ job.last_run_at[:19] }}</span></div>
+  {% endif %}
+  {% if job.last_status %}
+  <div class="meta-item">Last status:
+    <span class="badge {% if job.last_status == 'ok' %}badge-ok{% else %}badge-error{% endif %}">
+      {{ job.last_status }}
+    </span>
+  </div>
+  {% endif %}
+</div>
+
+{% if job.skills %}
+<h2>Skills</h2>
+<ul class="item-list">
+  {% for skill_name in job.skills %}
+  <li><span class="item-main"><a href="/skills/{{ skill_name }}">{{ skill_name }}</a></span></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<h2>Prompt</h2>
+<div class="memory-entry" style="white-space: pre-wrap;">{{ job.prompt }}</div>
+
+{% if job.last_error %}
+<h2>Last Error</h2>
+<div class="memory-entry" style="color: var(--error);">{{ job.last_error }}</div>
+{% endif %}
+
+{% if outputs %}
+<h2>Output History</h2>
+{% for out in outputs %}
+<h3>{{ out.timestamp }}</h3>
+<div class="config-block">{{ out.content }}</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

@@ -1,79 +1,61 @@
 {% extends "base.html" %}
-{% block title %}Sessions — Hermes Dashboard{% endblock %}
+
+{% block title %}Sessions{% endblock %}
 
 {% block content %}
-<h1>Sessions</h1>
+<div class="page-header">
+  <h1>Sessions</h1>
+  <label class="toggle-label">
+    <input type="checkbox" id="toggle-sub" {% if show_subagents %}checked{% endif %}
+           onchange="window.location='?show_sub=' + (this.checked ? '1' : '0') + '{% if query %}&q={{ query }}{% endif %}'">
+    Show subagents
+  </label>
+</div>
 
-<form class="search-form" method="get" action="/sessions">
-    <input type="search" name="q" value="{{ query|default('') }}" placeholder="Search sessions…" autocomplete="off">
-    <button type="submit" class="btn">Search</button>
+<form class="search-form" action="/sessions" method="get">
+  <input type="search" name="q" placeholder="Search messages..." value="{{ query or '' }}">
+  {% if show_subagents %}<input type="hidden" name="show_sub" value="1">{% endif %}
 </form>
 
 {% if sessions %}
-<div class="table-wrap">
-    <table>
-        <thead>
-            <tr>
-                <th>Title / ID</th>
-                <th>Source</th>
-                <th>Model</th>
-                <th class="num">Messages</th>
-                <th class="num">Tokens (in/out)</th>
-                <th class="num">Cost</th>
-                <th>Date</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for s in sessions %}
-            <tr>
-                <td>
-                    <a href="/sessions/{{ s.id }}" class="truncate">
-                        {{ s.title or (s.id[:20] if s.id else '—') }}
-                    </a>
-                </td>
-                <td><span class="badge badge-source">{{ s.source|default('—') }}</span></td>
-                <td class="mono">{{ s.model|short_model }}</td>
-                <td class="num">{{ s.message_count|default(0) }}</td>
-                <td class="num mono">
-                    {{ s.input_tokens|default(0)|short_number }} / {{ s.output_tokens|default(0)|short_number }}
-                </td>
-                <td class="num mono">${{ "%.4f"|format(s.cost|default(0)) }}</td>
-                <td class="text-dim">
-                    {% if s.started_at %}
-                        {{ s.started_at.strftime('%Y-%m-%d %H:%M') }}
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+<ul class="item-list">
+  {% for s in sessions %}
+  <li>
+    <span class="item-main">
+      <a href="/sessions/{{ s.id }}">
+        {% if s.title %}{{ s.title }}{% else %}<span class="mono">{{ s.short_id }}</span>{% endif %}
+      </a>
+      {% if s.is_subagent %}<span class="badge badge-sub">◇ subagent</span>{% endif %}
+      {% if s.source == 'cron' %}<span class="badge badge-cron">cron</span>
+      {% else %}<span class="badge badge-source">{{ s.source }}</span>{% endif %}
+      {% if s.end_reason == 'compression' %}<span class="badge badge-source">→ compressed</span>{% endif %}
+    </span>
+    <span class="item-meta">
+      {{ s.model_short }}
+      · {{ s.message_count }} msgs
+      · {{ "{:,}".format(s.total_tokens) }} tok
+      {% if s.estimated_cost_usd %}· ${{ "%.3f"|format(s.estimated_cost_usd) }}{% endif %}
+      · {{ s.started.strftime('%b %d %H:%M') }}
+    </span>
+  </li>
+  {% endfor %}
+</ul>
 
+{% if total > sessions|length %}
 <div class="pagination">
-    {% if page > 1 %}
-        <a href="/sessions?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}">← Previous</a>
-    {% else %}
-        <span class="disabled">← Previous</span>
-    {% endif %}
-
-    <span class="text-dim">Page {{ page }}</span>
-
-    {% if has_next %}
-        <a href="/sessions?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}">Next →</a>
-    {% else %}
-        <span class="disabled">Next →</span>
-    {% endif %}
+  {% if offset > 0 %}
+  <a href="?offset={{ offset - limit }}&show_sub={{ '1' if show_subagents else '0' }}{% if query %}&q={{ query }}{% endif %}">← Prev</a>
+  {% endif %}
+  <small class="dim">{{ offset + 1 }}–{{ offset + sessions|length }} of {{ total }}</small>
+  {% if offset + limit < total %}
+  <a href="?offset={{ offset + limit }}&show_sub={{ '1' if show_subagents else '0' }}{% if query %}&q={{ query }}{% endif %}">Next →</a>
+  {% endif %}
 </div>
+{% endif %}
 
 {% else %}
-<p class="text-dim">
-    {% if query %}
-        No sessions found matching "{{ query }}".
-    {% else %}
-        No sessions yet.
-    {% endif %}
+<p class="empty">
+  {% if query %}No sessions matching "{{ query }}"{% else %}No sessions found{% endif %}
 </p>
 {% endif %}
 {% endblock %}

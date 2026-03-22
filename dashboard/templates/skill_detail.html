@@ -1,47 +1,45 @@
 {% extends "base.html" %}
-{% block title %}{{ skill.name|default('Skill') }} — Hermes Dashboard{% endblock %}
+
+{% block title %}{{ skill.name }}{% endblock %}
 
 {% block content %}
-<h1>{{ skill.name|default('Skill') }}</h1>
-
-{% if skill.description %}
-<p class="text-dim">{{ skill.description }}</p>
-{% endif %}
-
-<div class="meta-bar">
-    <div class="meta-item">
-        <span class="meta-label">Category:</span>
-        {{ skill.category|default('—') }}
-    </div>
-    <div class="meta-item">
-        <span class="meta-label">Version:</span>
-        <code>{{ skill.version|default('—') }}</code>
-    </div>
-    <div class="meta-item">
-        <span class="meta-label">Path:</span>
-        <code>{{ skill.path|default('—') }}</code>
-    </div>
+<div class="page-header">
+  <h1>{{ skill.name }}</h1>
+  <a href="/skills">← Back</a>
 </div>
 
-{% if skill.body_html %}
-<div class="section">
-    <div class="rendered-content">
-        {{ skill.body_html|safe }}
-    </div>
+<div class="session-meta">
+  {% if skill.category %}
+  <div class="meta-item">Category: <span>{{ skill.category }}</span></div>
+  {% endif %}
+  {% if skill.version %}
+  <div class="meta-item">Version: <span>{{ skill.version }}</span></div>
+  {% endif %}
+  {% if skill.author %}
+  <div class="meta-item">Author: <span>{{ skill.author }}</span></div>
+  {% endif %}
+  {% if skill.platforms %}
+  <div class="meta-item">Platforms: <span>{{ skill.platforms | join(', ') }}</span></div>
+  {% endif %}
 </div>
-{% endif %}
+
+<p>{{ skill.description }}</p>
 
 {% if skill.linked_files %}
-<div class="section">
-    <div class="section-header">
-        <h2>Linked Files</h2>
-        <span class="section-count">{{ skill.linked_files|length }} files</span>
-    </div>
-    <ul class="file-list">
-        {% for f in skill.linked_files %}
-        <li>{{ f }}</li>
-        {% endfor %}
-    </ul>
-</div>
+<h2>Linked Files</h2>
+<ul class="item-list">
+  {% for subdir, files in skill.linked_files.items() %}
+  {% for f in files %}
+  <li>
+    <span class="item-main mono">{{ subdir }}/{{ f }}</span>
+  </li>
+  {% endfor %}
+  {% endfor %}
+</ul>
 {% endif %}
+
+<h2>Instructions</h2>
+<div class="skill-body">
+  {{ body_html | safe }}
+</div>
 {% endblock %}

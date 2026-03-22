@@ -1,302 +1,169 @@
-"""Hermes Dashboard — Starlette application."""
+"""Hermes Dashboard — Starlette app with Jinja2 templates."""
 
-import asyncio
-import json
 from pathlib import Path
-from collections import defaultdict
-from datetime import datetime
 
+import markdown
+import yaml
 from starlette.applications import Starlette
-from starlette.routing import Route, Mount
 from starlette.requests import Request
-from starlette.responses import Response, StreamingResponse
+from starlette.responses import HTMLResponse
+from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-import markdown
-import pygments
-from pygments.formatters import HtmlFormatter
-
-from dashboard.readers import sessions, memory, skills
+from dashboard.readers import sessions, memory, skills, cron, hermes_config
+from dashboard.config import config_yaml_path
 
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
-# ── Jinja2 custom filters ────────────────────────────────────────
+# --- Route handlers ---
 
-
-def intcomma(value):
-    """Format number with commas: 1234567 -> 1,234,567."""
-    try:
-        n = int(value)
-        return f"{n:,}"
-    except (ValueError, TypeError):
-        return value
-
-
-def short_number(value):
-    """Compact number: 1234567 -> 1.2M."""
-    try:
-        n = float(value)
-    except (ValueError, TypeError):
-        return value
-    if n >= 1_000_000_000:
-        return f"{n / 1_000_000_000:.1f}B"
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}K"
-    return str(int(n))
-
-
-def format_cost(value):
-    """Format USD cost: 0.0234 -> $0.0234."""
-    try:
-        v = float(value)
-        if v == 0:
-            return "—"
-        if v < 0.01:
-            return f"${v:.4f}"
-        return f"${v:.2f}"
-    except (ValueError, TypeError):
-        return "—"
-
-
-def format_date(value, fmt="%Y-%m-%d %H:%M"):
-    """Format datetime object or timestamp."""
-    if value is None:
-        return "—"
-    if isinstance(value, (int, float)):
-        value = datetime.fromtimestamp(value)
-    if isinstance(value, datetime):
-        return value.strftime(fmt)
-    return str(value)
-
-
-def short_model(value):
-    """Shorten model name: anthropic/claude-opus-4.6 -> claude-opus-4.6."""
-    if not value:
-        return "—"
-    if "/" in value:
-        return value.split("/", 1)[1]
-    return value
-
-
-def render_markdown(text):
-    """Render markdown to HTML."""
-    if not text:
-        return ""
-    return markdown.markdown(
-        text,
-        extensions=["fenced_code", "tables", "codehilite", "nl2br"],
-        extension_configs={
-            "codehilite": {"css_class": "highlight", "guess_lang": False}
-        },
-    )
-
-
-# Register filters
-templates.env.filters["intcomma"] = intcomma
-templates.env.filters["short_number"] = short_number
-templates.env.filters["format_cost"] = format_cost
-templates.env.filters["format_date"] = format_date
-templates.env.filters["short_model"] = short_model
-templates.env.filters["render_markdown"] = render_markdown
-
-
-# ── Route handlers ────────────────────────────────────────────────
-
-
-async def index(request: Request) -> Response:
+async def index(request: Request):
     stats = sessions.get_stats()
-    recent = sessions.list_sessions(limit=10, offset=0)
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        {"stats": stats, "recent_sessions": recent},
-    )
+    skill_list = skills.list_skills()
+    recent, _ = sessions.list_sessions(limit=8, include_subagents=False)
+    return templates.TemplateResponse(request, "index.html", {
+        "page": "index",
+        "stats": stats,
+        "skill_count": len(skill_list),
+        "recent_sessions": recent,
+    })
 
 
-async def sessions_list(request: Request) -> Response:
+async def sessions_list(request: Request):
     query = request.query_params.get("q", "").strip()
-    page = int(request.query_params.get("page", 1))
-    per_page = 30
-    offset = (page - 1) * per_page
+    show_sub = request.query_params.get("show_sub", "0") == "1"
+    offset = int(request.query_params.get("offset", "0"))
+    limit = 30
 
-    results = sessions.list_sessions(
-        limit=per_page + 1,  # fetch one extra to check has_next
-        offset=offset,
-        search=query or None,
-    )
+    if query:
+        session_list = sessions.search_sessions(query, limit=limit)
+        total = len(session_list)
+    else:
+        session_list, total = sessions.list_sessions(
+            limit=limit, offset=offset, include_subagents=show_sub
+        )
 
-    has_next = len(results) > per_page
-    if has_next:
-        results = results[:per_page]
-
-    return templates.TemplateResponse(
-        request,
-        "sessions.html",
-        {
-            "sessions": results,
-            "query": query,
-            "page": page,
-            "has_next": has_next,
-        },
-    )
+    return templates.TemplateResponse(request, "sessions.html", {
+        "page": "sessions",
+        "sessions": session_list,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "query": query,
+        "show_subagents": show_sub,
+    })
 
 
-async def session_detail(request: Request) -> Response:
+async def session_detail(request: Request):
     session_id = request.path_params["session_id"]
     session = sessions.get_session(session_id)
     if not session:
         return templates.TemplateResponse(request, "404.html", status_code=404)
 
+    chain = sessions.get_conversation_chain(session_id)
     msgs = sessions.get_messages(session_id)
-    return templates.TemplateResponse(
-        request,
-        "session_detail.html",
-        {"session": session, "messages": msgs},
-    )
+
+    return templates.TemplateResponse(request, "session_detail.html", {
+        "page": "sessions",
+        "session": session,
+        "chain": chain,
+        "messages": msgs,
+        "show_system": request.query_params.get("system", "0") == "1",
+    })
 
 
-async def memory_page(request: Request) -> Response:
-    data = memory.get_all()
-    return templates.TemplateResponse(
-        request,
-        "memory.html",
-        {
-            "memory_entries": data["memory"],
-            "user_entries": data["user"],
-        },
-    )
+async def memory_page(request: Request):
+    mem = memory.get_memory()
+    user = memory.get_user_profile()
+    return templates.TemplateResponse(request, "memory.html", {
+        "page": "memory",
+        "memory": mem,
+        "user_profile": user,
+    })
 
 
-async def skills_list(request: Request) -> Response:
-    all_skills = skills.list_skills()
-    by_category = defaultdict(list)
-    for s in all_skills:
-        cat = s.get("category") or "uncategorized"
-        by_category[cat].append(s)
-    # Sort categories
-    by_category = dict(sorted(by_category.items()))
-    return templates.TemplateResponse(
-        request,
-        "skills.html",
-        {"skills_by_category": by_category},
-    )
+async def skills_list(request: Request):
+    skill_list = skills.list_skills()
+    return templates.TemplateResponse(request, "skills.html", {
+        "page": "skills",
+        "skills": skill_list,
+    })
 
 
-async def skill_detail_page(request: Request) -> Response:
+async def skill_detail(request: Request):
     name = request.path_params["name"]
     skill = skills.get_skill(name)
     if not skill:
         return templates.TemplateResponse(request, "404.html", status_code=404)
 
-    # Pre-render markdown body
-    skill["body_html"] = render_markdown(skill.get("body", ""))
-    return templates.TemplateResponse(
-        request,
-        "skill_detail.html",
-        {"skill": skill},
+    body_html = markdown.markdown(
+        skill.body,
+        extensions=["fenced_code", "tables", "toc"],
     )
 
-
-def _escape_html(text: str) -> str:
-    """Escape HTML entities for safe injection."""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&#x27;")
-    )
+    return templates.TemplateResponse(request, "skill_detail.html", {
+        "page": "skills",
+        "skill": skill,
+        "body_html": body_html,
+    })
 
 
-async def session_stream(request: Request) -> Response:
-    """SSE endpoint: streams new messages for a session as they arrive."""
-    session_id = request.path_params["session_id"]
-    after_id = int(request.query_params.get("after", 0))
-
-    async def event_generator():
-        last_id = after_id
-        idle_count = 0
-
-        while True:
-            # Check if client disconnected
-            if await request.is_disconnected():
-                break
-
-            new_msgs = sessions.get_messages_after(session_id, last_id)
-
-            if new_msgs:
-                idle_count = 0
-                for msg in new_msgs:
-                    last_id = msg["id"]
-                    # Build the SSE data payload
-                    payload = {
-                        "id": msg["id"],
-                        "role": msg.get("role", "unknown"),
-                        "content": msg.get("content", ""),
-                        "tool_name": msg.get("tool_name", ""),
-                    }
-                    data = json.dumps(payload, default=str)
-                    yield f"data: {data}\n\n"
-            else:
-                idle_count += 1
-
-                # Check if session has ended — if so, send a done event and stop
-                if idle_count % 5 == 0:  # check every ~5 seconds
-                    if sessions.get_session_ended(session_id):
-                        yield 'event: done\ndata: {"ended": true}\n\n'
-                        break
-
-            # Poll interval: 1 second
-            await asyncio.sleep(1)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+async def cron_list(request: Request):
+    jobs = cron.list_jobs()
+    return templates.TemplateResponse(request, "cron.html", {
+        "page": "cron",
+        "jobs": jobs,
+    })
 
 
-async def not_found(request: Request, exc: Exception) -> Response:
+async def cron_detail(request: Request):
+    job_id = request.path_params["job_id"]
+    job = cron.get_job(job_id)
+    if not job:
+        return templates.TemplateResponse(request, "404.html", status_code=404)
+
+    outputs = cron.get_job_outputs(job_id)
+
+    return templates.TemplateResponse(request, "cron_detail.html", {
+        "page": "cron",
+        "job": job,
+        "outputs": outputs,
+    })
+
+
+async def config_page(request: Request):
+    config = hermes_config.read_config_redacted()
+    config_str = yaml.dump(config, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    return templates.TemplateResponse(request, "config.html", {
+        "page": "config",
+        "config_yaml": config_str,
+        "config_path": str(config_yaml_path()),
+    })
+
+
+async def not_found(request: Request, exc):
     return templates.TemplateResponse(request, "404.html", status_code=404)
 
 
-async def server_error(request: Request, exc: Exception) -> Response:
-    return templates.TemplateResponse(
-        request,
-        "404.html",
-        {"message": "Internal server error"},
-        status_code=500,
-    )
-
-
-# ── App ────────────────────────────────────────────────────────────
+# --- App ---
 
 routes = [
     Route("/", index),
     Route("/sessions", sessions_list),
-    Route("/sessions/{session_id}", session_detail),
-    Route("/sessions/{session_id}/stream", session_stream),
+    Route("/sessions/{session_id:path}", session_detail),
     Route("/memory", memory_page),
     Route("/skills", skills_list),
-    Route("/skills/{name}", skill_detail_page),
+    Route("/skills/{name:str}", skill_detail),
+    Route("/cron", cron_list),
+    Route("/cron/{job_id:str}", cron_detail),
+    Route("/config", config_page),
     Mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static"),
 ]
 
-exception_handlers = {
-    404: not_found,
-    500: server_error,
-}
-
 app = Starlette(
     routes=routes,
-    exception_handlers=exception_handlers,
+    exception_handlers={404: not_found},
 )

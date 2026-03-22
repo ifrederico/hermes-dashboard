@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Cron Jobs{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Cron Jobs</h1>
+  <small class="dim">{{ jobs|length }} job{{ 's' if jobs|length != 1 else '' }}</small>
+</div>
+
+{% if jobs %}
+<ul class="item-list">
+  {% for job in jobs %}
+  <li>
+    <span class="item-main">
+      <a href="/cron/{{ job.id }}">{{ job.name or job.id }}</a>
+      {% if job.state == 'paused' %}
+        <span class="badge badge-paused">paused</span>
+      {% elif job.state == 'completed' %}
+        <span class="badge badge-source">completed</span>
+      {% elif job.enabled %}
+        <span class="badge badge-ok">active</span>
+      {% endif %}
+      {% if job.last_status == 'error' %}
+        <span class="badge badge-error">last run failed</span>
+      {% endif %}
+      <div class="cron-prompt">{{ job.prompt[:80] }}{% if job.prompt|length > 80 %}...{% endif %}</div>
+    </span>
+    <span class="item-meta">
+      {{ job.schedule_display }}
+      {% if job.next_run_at %}· next: {{ job.next_run_at[:16] }}{% endif %}
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty">No cron jobs configured</p>
+{% endif %}
+{% endblock %}

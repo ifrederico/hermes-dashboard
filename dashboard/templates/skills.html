@@ -1,28 +1,37 @@
 {% extends "base.html" %}
-{% block title %}Skills — Hermes Dashboard{% endblock %}
+
+{% block title %}Skills{% endblock %}
 
 {% block content %}
-<h1>Skills</h1>
+<div class="page-header">
+  <h1>Skills</h1>
+  <small class="dim">{{ skills|length }} installed</small>
+</div>
 
-{% if skills_by_category %}
-    {% for category, skills in skills_by_category.items() %}
-    <div class="section">
-        <div class="section-header">
-            <h2>{{ category|default('Uncategorized') }}</h2>
-            <span class="section-count">{{ skills|length }} skills</span>
-        </div>
-        <div class="skill-list">
-            {% for skill in skills %}
-            <div class="skill-item">
-                <a href="/skills/{{ skill.name }}" class="skill-name">{{ skill.name }}</a>
-                <span class="skill-desc">{{ skill.description|default('—')|truncate(80) }}</span>
-                <span class="skill-version">{{ skill.version|default('') }}</span>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endfor %}
+{% if skills %}
+{% set categories = {} %}
+{% for s in skills %}
+  {% set cat = s.category or 'uncategorized' %}
+  {% if cat not in categories %}
+    {% set _ = categories.update({cat: []}) %}
+  {% endif %}
+  {% set _ = categories[cat].append(s) %}
+{% endfor %}
+
+{% for cat, cat_skills in categories.items() | sort %}
+<h2>{{ cat }}</h2>
+<div class="skill-grid">
+  {% for s in cat_skills %}
+  <div class="skill-card">
+    {% if s.category %}<div class="cat">{{ s.category }}</div>{% endif %}
+    <h3><a href="/skills/{{ s.name }}">{{ s.name }}</a></h3>
+    <div class="desc">{{ s.description[:120] }}{% if s.description|length > 120 %}...{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+
 {% else %}
-    <p class="text-dim">No skills found.</p>
+<p class="empty">No skills installed</p>
 {% endif %}
 {% endblock %}

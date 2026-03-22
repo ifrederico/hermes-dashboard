@@ -1,164 +1,65 @@
 {% extends "base.html" %}
-{% block title %}{{ session.title|default(session.id|default('Session')) }} — Hermes Dashboard{% endblock %}
+
+{% block title %}Session {{ session.short_id }}{% endblock %}
 
 {% block content %}
-<h1>{{ session.title|default(session.id|default('Session')) }}</h1>
-
-<div class="meta-bar">
-    <div class="meta-item">
-        <span class="meta-label">Model:</span>
-        <code>{{ session.model|default('—') }}</code>
-    </div>
-    <div class="meta-item">
-        <span class="meta-label">Source:</span>
-        <span class="badge badge-source">{{ session.source|default('—') }}</span>
-    </div>
-    <div class="meta-item">
-        <span class="meta-label">Started:</span>
-        {% if session.started_at %}
-            {{ session.started_at.strftime('%Y-%m-%d %H:%M') }}
-        {% else %}
-            —
-        {% endif %}
-    </div>
-    <div class="meta-item">
-        <span class="meta-label">Ended:</span>
-        {% if session.ended_at %}
-            {{ session.ended_at.strftime('%Y-%m-%d %H:%M') }}
-        {% else %}
-            <span id="live-badge" class="badge badge-live">● LIVE</span>
-        {% endif %}
-    </div>
-    <div class="meta-item">
-        <span class="meta-label">Tokens:</span>
-        {{ session.input_tokens|default(0)|intcomma }} in / {{ session.output_tokens|default(0)|intcomma }} out
-    </div>
-    <div class="meta-item">
-        <span class="meta-label">Cost:</span>
-        ${{ "%.4f"|format(session.cost|default(0)) }}
-    </div>
+<div class="page-header">
+  <h1>
+    {% if session.title %}{{ session.title }}{% else %}Session {{ session.short_id }}{% endif %}
+    {% if session.is_subagent %}<span class="badge badge-sub">◇ subagent</span>{% endif %}
+  </h1>
+  <a href="/sessions">← Back</a>
 </div>
 
-<div class="section">
-    <div class="section-header">
-        <h2>Conversation</h2>
-        <span class="section-count" id="msg-count">{{ messages|length }} messages</span>
-    </div>
-
-    <div class="conversation" id="conversation">
-        {% for msg in messages %}
-        {% set role = msg.role|default('unknown') %}
-        <div class="message message-{{ role }}" data-msg-id="{{ msg.id }}">
-            <div class="message-role">{{ role }}</div>
-            {% if role == 'tool' and msg.tool_name %}
-            <div class="message-tool-name">⚙ {{ msg.tool_name }}</div>
-            {% endif %}
-            <div class="message-content">{{ msg.content|default('(empty)')|e }}</div>
-        </div>
-        {% endfor %}
-    </div>
+<div class="session-meta">
+  <div class="meta-item">ID: <span class="mono">{{ session.id }}</span></div>
+  <div class="meta-item">Source: <span>{{ session.source }}</span></div>
+  <div class="meta-item">Model: <span class="mono">{{ session.model_short }}</span></div>
+  <div class="meta-item">Messages: <span>{{ session.message_count }}</span></div>
+  <div class="meta-item">Tool calls: <span>{{ session.tool_call_count }}</span></div>
+  <div class="meta-item">Tokens: <span>{{ "{:,}".format(session.input_tokens) }} in / {{ "{:,}".format(session.output_tokens) }} out</span></div>
+  {% if session.estimated_cost_usd %}
+  <div class="meta-item">Cost: <span>${{ "%.4f"|format(session.estimated_cost_usd) }}</span></div>
+  {% endif %}
+  <div class="meta-item">Started: <span>{{ session.started.strftime('%Y-%m-%d %H:%M:%S') }}</span></div>
+  {% if session.ended %}
+  <div class="meta-item">Ended: <span>{{ session.ended.strftime('%Y-%m-%d %H:%M:%S') }}</span></div>
+  {% endif %}
+  {% if session.end_reason %}
+  <div class="meta-item">End reason: <span>{{ session.end_reason }}</span></div>
+  {% endif %}
 </div>
 
-{% if not messages %}
-<p class="text-dim">No messages in this session yet.</p>
+{% if chain|length > 1 %}
+<div class="chain-info">
+  ↳ Part of a conversation chain ({{ chain|length }} segments):
+  {% for c in chain %}
+    {% if c.id == session.id %}
+      <strong>{{ c.short_id }}</strong>
+    {% else %}
+      <a href="/sessions/{{ c.id }}">{{ c.short_id }}</a>
+    {% endif %}
+    {% if not loop.last %} → {% endif %}
+  {% endfor %}
+</div>
 {% endif %}
-{% endblock %}
 
-{% block scripts %}
-{% if not session.ended_at %}
-<script>
-(function() {
-    var conv = document.getElementById('conversation');
-    var countEl = document.getElementById('msg-count');
-    var liveBadge = document.getElementById('live-badge');
-    var msgCount = {{ messages|length }};
-
-    // Find the highest message id we already have
-    var lastId = 0;
-    var existing = conv.querySelectorAll('[data-msg-id]');
-    for (var i = 0; i < existing.length; i++) {
-        var mid = parseInt(existing[i].getAttribute('data-msg-id'), 10);
-        if (mid > lastId) lastId = mid;
-    }
-
-    function escapeHtml(text) {
-        var div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function appendMessage(msg) {
-        var div = document.createElement('div');
-        div.className = 'message message-' + msg.role;
-        div.setAttribute('data-msg-id', msg.id);
-
-        var roleDiv = document.createElement('div');
-        roleDiv.className = 'message-role';
-        roleDiv.textContent = msg.role;
-        div.appendChild(roleDiv);
-
-        if (msg.role === 'tool' && msg.tool_name) {
-            var toolDiv = document.createElement('div');
-            toolDiv.className = 'message-tool-name';
-            toolDiv.textContent = '⚙ ' + msg.tool_name;
-            div.appendChild(toolDiv);
-        }
-
-        var contentDiv = document.createElement('div');
-        contentDiv.className = 'message-content';
-        contentDiv.textContent = msg.content || '(empty)';
-        div.appendChild(contentDiv);
-
-        conv.appendChild(div);
-        msgCount++;
-        countEl.textContent = msgCount + ' messages';
-
-        // Auto-scroll if user is near the bottom
-        var isNearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 200);
-        if (isNearBottom) {
-            div.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }
-    }
-
-    function markEnded() {
-        if (liveBadge) {
-            liveBadge.textContent = 'Ended';
-            liveBadge.className = 'badge badge-source';
-        }
-    }
-
-    // Open SSE connection
-    var url = '/sessions/{{ session.id }}/stream?after=' + lastId;
-    var source = new EventSource(url);
-
-    source.onmessage = function(e) {
-        try {
-            var msg = JSON.parse(e.data);
-            appendMessage(msg);
-        } catch (err) {
-            console.error('SSE parse error:', err);
-        }
-    };
-
-    source.addEventListener('done', function(e) {
-        markEnded();
-        source.close();
-    });
-
-    source.onerror = function() {
-        // EventSource auto-reconnects, but if session ended we stop
-        setTimeout(function() {
-            if (source.readyState === EventSource.CLOSED) {
-                markEnded();
-            }
-        }, 3000);
-    };
-
-    // Clean up on page unload
-    window.addEventListener('beforeunload', function() {
-        source.close();
-    });
-})();
-</script>
+{% if messages %}
+<div class="message-thread">
+  {% for msg in messages %}
+  {% if msg.role != 'system' or show_system %}
+  <div class="message message-{{ msg.role }}">
+    <div class="role-label">
+      {{ msg.role }}
+      {% if msg.tool_name %}· {{ msg.tool_name }}{% endif %}
+      <span style="float:right">{{ msg.time.strftime('%H:%M:%S') }}</span>
+    </div>
+    <div class="content">{{ msg.content_preview if msg.role == 'tool' else (msg.content or '') }}</div>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty">No messages in this session</p>
 {% endif %}
 {% endblock %}
